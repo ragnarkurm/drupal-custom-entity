@@ -1,0 +1,85 @@
+<?php
+
+// this is used so frequently
+
+function w($data = NULL, $entity_type = 'node') {
+
+  // static $calls = 0;
+  // static $hits = 0;
+  // $calls++;
+
+  static $cache = array();
+
+  $data_type = gettype($data);
+  switch ($data_type) {
+
+    case 'string':
+      assert(preg_match('/^\d+$/', $data), 'If DATA is string type, then it must be numeric.');
+      $data = (int) $data;
+
+    case 'integer':
+      $c = &$cache[sprintf('%s:%d', $entity_type, $data)];
+      if (!empty($c)) {
+        goto hit;
+      }
+      $d = entity_load_single($entity_type, $data);
+      assert(is_object($d), "No such entity '{$entity_type}:{$data}'.");
+      $d = entity_metadata_wrapper($entity_type, $d);
+      goto nohit;
+
+    case 'NULL':
+      assert($entity_type === 'user', 'If DATA is NULL type, then entity type must be user.');
+      $d = $GLOBALS['user'];
+      $c = &$cache[sprintf('%s:%d', $entity_type, $d->uid)];
+      if (!empty($c)) {
+        goto hit;
+      }
+      $d = entity_metadata_wrapper($entity_type, $d);
+      goto nohit;
+
+    case 'object':
+      if (get_class($data) === 'EntityDrupalWrapper') {
+          $c = &$cache[sprintf('%s:%d', $entity_type, $data->getIdentifier())];
+          if (!empty($c)) {
+            goto hit;
+          }
+          assert($data->type() === $entity_type, sprintf('Invalid wrapper type: %s vs %s', $entity_type, $data->type()));
+          $d = $data;
+          goto nohit;
+      }
+
+      // any non-wrapper drupal object like node or user
+      static $entity2id = NULL;
+      if (is_null($entity2id)) {
+        foreach (entity_get_info() as $type => $info) {
+          $entity2id[$type] = $info['entity keys']['id'];
+        }
+      }
+      $id = &$entity2id[$entity_type];
+      assert(!empty($id), "No such entity type '$entity_type'.");
+      assert(!empty($data->$id), "DATA of type '$entity_type' does not contain ID '$id'.");
+      $c = &$cache[sprintf('%s:%d', $entity_type, $data->$id)];
+      if (!empty($c)) {
+        goto hit;
+      }
+      $d = entity_metadata_wrapper($entity_type, $data);
+      assert(!empty($d), "Unable to wrap object of type '{$entity_type}'.");
+      assert($d->type() === $entity_type, sprintf('Invalid wrapper type: %s vs %s', $entity_type, $d->type()));
+      goto nohit;
+
+    default:
+      assert(FALSE, "Unexpected data type '$data_type'.");
+  }
+
+  assert(FALSE, __FILE__ . ', ' . __LINE__ . ": Should not reach here.");
+
+  hit:
+  // $hits++;
+  // dpm(sprintf('Hit! %d/%d = %d%%', $hits, $calls, 100*$hits/$calls));
+  return $c;
+
+  nohit:
+  $c = $d;
+  return $d;
+
+}

@@ -1,0 +1,5 @@
+name = Entity extension
+description = Entity extension
+core = 7.x
+
+dependencies[] = entity
